@@ -54,11 +54,22 @@ async function authenticate(req, res, next) {
 }
 
 function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden' });
+  return async (req, res, next) => {
+    try {
+      if (!req.user || !roles.includes(req.user.role)) {
+        await logEvent({
+          actorId: req.user ? req.user.id : null,
+          action: 'auth.role_denied',
+          outcome: 'denied',
+          ip: req.ip,
+          details: { required: roles, path: req.path, method: req.method },
+        });
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      next();
+    } catch (err) {
+      next(err);
     }
-    next();
   };
 }
 

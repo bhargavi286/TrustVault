@@ -9,6 +9,7 @@ app.use(express.json({ limit: '10kb' }));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/documents', require('./routes/documents'));
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
