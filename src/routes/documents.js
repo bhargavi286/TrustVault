@@ -125,5 +125,188 @@ router.get('/:id/download', authenticate, async (req, res, next) => {
     next(err);
   }
 });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PERMISSIONS = ['read', 'edit'];
+
+const likeEscape = (s) => s.replace(/[\\%_]/g, '\\$&');
+
+function validDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+// List + search. The permission filter is inside the SQL itself:
+// a user only ever gets documents they own or hold an active grant for.
+router.get('/', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role === 'admin') return res.json([]); // admin never sees document content
+
+    const filters = { q: req.query.q, owner: req.query.owner, category: req.query.category, from: req.query.from, to: req.query.to };
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && (typeof v !== 'string' || v.length > 100)) {
+        return res.status(400).json({ error: `Bad ${k}` });
+      }
+    }
+
+    const params = [req.user.id];
+    const where = [];
+    if (filters.q) {
+      params.push('%' + likeEscape(filters.q) + '%');
+      where.push(`d.name ILIKE $${params.length}`);
+    }
+    if (filters.owner) {
+      params.push('%' + likeEscape(filters.owner) + '%');
+      where.push(`u.email ILIKE $${params.length}`);
+    }
+    if (filters.category) {
+      params.push(filters.category);
+      where.push(`d.category = $${params.length}`);
+    }
+    if (filters.from) {
+      if (!validDate(filters.from)) return res.status(400).json({ error: 'Bad from date (use YYYY-MM-DD)' });
+      params.push(filters.from);
+      where.push(`d.created_at >= $${params.length}::date`);
+    }
+    if (filters.to) {
+      if (!validDate(filters.to)) return res.status(400).json({ error: 'Bad to date (use YYYY-MM-DD)' });
+      params.push(filters.to);
+      where.push(`d.created_at < ($${params.length}::date + 1)`);
+    }
+
+    const { rows } = await pool.query(
+      `SELECT d.id, d.name, d.category, d.size_bytes, d.created_at, u.email AS owner_email,
+              CASE WHEN d.owner_id = $1 THEN 'owner' ELSE g.permission END AS my_permission
+       FROM documents d
+       JOIN users u ON u.id = d.owner_id
+       LEFT JOIN grants g ON g.document_id = d.id AND g.user_id = $1 AND g.revoked_at IS NULL
+       WHERE d.deleted_at IS NULL AND (d.owner_id = $1 OR g.id IS NOT NULL)
+       ${where.length ? 'AND ' + where.join(' AND ') : ''}
+       ORDER BY d.created_at DESC
+       LIMIT 50`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Who has access to this document (owner only)
+router.get('/:id/grants', authenticate, async (req, res, next) => {
+  try {
+    const doc = await authorize(req, req.params.id, 'share');
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    const { rows } = await pool.query(
+      `SELECT g.user_id, u.email, g.permission, g.granted_at
+       FROM grants g JOIN users u ON u.id = g.user_id
+       WHERE g.document_id = $1 AND g.revoked_at IS NULL
+       ORDER BY g.granted_at`,
+      [doc.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Grant (or change) access. Owner only.
+router.post('/:id/grants', authenticate, async (req, res, next) => {
+  try {
+    const doc = await authorize(req, req.params.id, 'share');
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const { email, permission } = req.body || {};
+    if (typeof email !== 'string' || !PERMISSIONS.includes(permission)) {
+      return res.status(400).json({ error: 'email and permission (read or edit) are required' });
+    }
+    const found = await pool.query('SELECT id, role, is_active FROM users WHERE email = $1', [email.trim().toLowerCase()]);
+    const target = found.rows[0];
+    if (!target || !target.is_active || target.role === 'admin' || target.id === req.user.id) {
+      return res.status(400).json({ error: 'Cannot grant access to that user' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const prev = await client.query(
+        `UPDATE grants SET revoked_at = now()
+         WHERE document_id = $1 AND user_id = $2 AND revoked_at IS NULL
+         RETURNING permission`,
+        [doc.id, target.id]
+      );
+      await client.query(
+        'INSERT INTO grants (document_id, user_id, permission, granted_by) VALUES ($1, $2, $3, $4)',
+        [doc.id, target.id, permission, req.user.id]
+      );
+      await logEvent(
+        {
+          actorId: req.user.id,
+          action: prev.rowCount ? 'grant.update' : 'grant.create',
+          outcome: 'allowed',
+          documentId: doc.id,
+          targetUserId: target.id,
+          ip: req.ip,
+          details: { permission, previous: prev.rowCount ? prev.rows[0].permission : null },
+        },
+        client
+      );
+      await client.query('COMMIT');
+      res.status(201).json({ ok: true, user_id: target.id, permission });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Take access away. Works on the very next request from that user.
+router.delete('/:id/grants/:userId', authenticate, async (req, res, next) => {
+  try {
+    const doc = await authorize(req, req.params.id, 'share');
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    if (!UUID.test(req.params.userId)) return res.status(400).json({ error: 'Bad user id' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const done = await client.query(
+        `UPDATE grants SET revoked_at = now()
+         WHERE document_id = $1 AND user_id = $2 AND revoked_at IS NULL
+         RETURNING permission`,
+        [doc.id, req.params.userId]
+      );
+      if (!done.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'No active grant for that user' });
+      }
+      await logEvent(
+        {
+          actorId: req.user.id,
+          action: 'grant.revoke',
+          outcome: 'allowed',
+          documentId: doc.id,
+          targetUserId: req.params.userId,
+          ip: req.ip,
+          details: { previous: done.rows[0].permission },
+        },
+        client
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
