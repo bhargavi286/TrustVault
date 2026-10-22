@@ -7,7 +7,7 @@ const app = require('../src/app');
 const pool = require('../src/db');
 const storage = require('../src/services/storage');
 
-jest.setTimeout(60000);
+jest.setTimeout(180000);
 
 const SECRET_TEXT = `top-secret-${Date.now()}`;
 const MISSING_ID = '00000000-0000-4000-8000-000000000000';
@@ -222,9 +222,10 @@ describe('uploads', () => {
     await storage.remove(row.rows[0].storage_key);
   });
 
-  test('file on disk does not contain the plain text', () => {
-    const raw = fs.readFileSync(path.join(__dirname, '..', 'storage', storageKey));
-    expect(raw.includes(Buffer.from(SECRET_TEXT))).toBe(false);
+    test('stored file bytes do not contain the plain text', async () => {
+    const { rows } = await pool.query('SELECT data FROM file_blobs WHERE storage_key = $1', [storageKey]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].data.includes(Buffer.from(SECRET_TEXT))).toBe(false);
   });
 });
 

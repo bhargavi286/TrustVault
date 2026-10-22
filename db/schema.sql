@@ -1,3 +1,9 @@
+-- ENCRYPTED FILE BYTES (kept in the database so they survive redeploys)
+CREATE TABLE IF NOT EXISTS file_blobs (
+  storage_key text PRIMARY KEY,
+  data        bytea NOT NULL
+);
+
 -- USERS
 CREATE TABLE IF NOT EXISTS users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
