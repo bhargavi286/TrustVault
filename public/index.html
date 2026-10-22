@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrustVault</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  input, button, select { padding: .4rem; margin: .15rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  td, th { border-bottom: 1px solid #ccc; padding: .4rem; text-align: left; }
+  #msg { color: #b00020; min-height: 1.5rem; }
+</style>
+</head>
+<body>
+<h1>TrustVault</h1>
+<p id="msg"></p>
+
+<section id="login">
+  <input id="email" placeholder="email" autocomplete="username">
+  <input id="password" type="password" placeholder="password" autocomplete="current-password">
+  <button id="loginBtn">Login</button>
+</section>
+
+<section id="app" hidden>
+  <p><b id="who"></b> <button id="logout">Logout (all devices)</button></p>
+  <div id="ownerTools">
+    <input id="file" type="file">
+    <input id="category" placeholder="category (optional)">
+    <button id="upload">Upload</button>
+  </div>
+  <div>
+    <input id="q" placeholder="search name">
+    <input id="cat" placeholder="category">
+    <button id="search">Search</button>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Owner</th><th>Category</th><th>Access</th><th></th></tr></thead>
+    <tbody id="docs"></tbody>
+  </table>
+  <div id="share" hidden>
+    <h3>Access to: <span id="shareTitle"></span></h3>
+    <ul id="grants"></ul>
+    <input id="gemail" placeholder="user email">
+    <select id="gperm"><option>read</option><option>edit</option></select>
+    <button id="grant">Grant</button>
+  </div>
+</section>
+<script src="app.js"></script>
+</body>
+</html>
