@@ -5,47 +5,285 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TrustVault</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-  input, button, select { padding: .4rem; margin: .15rem; }
-  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-  td, th { border-bottom: 1px solid #ccc; padding: .4rem; text-align: left; }
-  #msg { color: #b00020; min-height: 1.5rem; }
+  :root { --g1:#6366f1; --g2:#a855f7; --g3:#ec4899; --cyan:#06b6d4; --ink:#1e1b4b;
+          --muted:#6b7280; --line:#e9e5ff; --bg:#f4f2ff; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); font-size: 15px; }
+  button { font-family: inherit; }
+  .muted { color: var(--muted); }
+
+  /* Toasts */
+  #toasts { position: fixed; top: 16px; right: 16px; z-index: 50; display: flex; flex-direction: column; gap: .5rem; }
+  .toast { padding: .7rem 1.1rem; border-radius: 12px; color: #fff; font-weight: 600;
+           box-shadow: 0 10px 28px rgba(0,0,0,.22); animation: slide .25s ease; }
+  .toast.err { background: linear-gradient(90deg, #ef4444, #ec4899); }
+  .toast.ok { background: linear-gradient(90deg, #10b981, #06b6d4); }
+  @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+
+  /* Buttons */
+  .btn { border: 0; border-radius: 10px; padding: .6rem 1.1rem; font-weight: 600; cursor: pointer; color: #fff;
+         background: linear-gradient(90deg, var(--g1), var(--g2)); box-shadow: 0 4px 14px rgba(99,102,241,.35);
+         transition: transform .12s, box-shadow .12s; font-size: .92rem; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99,102,241,.4); }
+  .btn.wide { width: 100%; }
+  .btn.small { padding: .4rem .8rem; font-size: .82rem; }
+  .btn-ghost { background: #fff; color: var(--g1); border: 1px solid #c7d2fe; box-shadow: none; }
+  .btn-danger { background: linear-gradient(90deg, #ef4444, #ec4899); box-shadow: 0 4px 14px rgba(239,68,68,.3); }
+  input, select { padding: .6rem .8rem; border: 1px solid #d8d4fe; border-radius: 10px; font-size: .93rem;
+                  background: #fff; font-family: inherit; }
+  input:focus, select:focus { outline: 3px solid #ddd6fe; border-color: var(--g2); }
+
+  /* Login */
+  .login { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+  .hero { background: linear-gradient(135deg, #312e81, #7e22ce 55%, #db2777); color: #fff; padding: 3rem;
+          position: relative; overflow: hidden; display: flex; align-items: center; }
+  .hero::before { content: ""; position: absolute; inset: 0; opacity: .6; animation: twinkle 3s infinite alternate;
+    background-image: radial-gradient(2px 2px at 20% 30%, #fff, transparent), radial-gradient(2px 2px at 70% 20%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent), radial-gradient(2px 2px at 85% 65%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 10% 85%, #fff, transparent), radial-gradient(2px 2px at 55% 45%, #fff, transparent); }
+  @keyframes twinkle { to { opacity: .15; } }
+  .hero-inner { position: relative; z-index: 1; max-width: 480px; }
+  .logo-big { font-size: 1.4rem; font-weight: 800; margin-bottom: 1.5rem; }
+  .hero h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 1.5rem; }
+  .points { list-style: none; padding: 0; margin: 0; }
+  .points li { margin: .8rem 0; background: rgba(255,255,255,.12); padding: .7rem 1rem; border-radius: 12px;
+               backdrop-filter: blur(6px); }
+  .panel { display: flex; align-items: center; justify-content: center; padding: 2rem; background: #fff; }
+  .login-card { width: 380px; max-width: 100%; }
+  .login-card h2 { margin: 0; font-size: 1.7rem; }
+  .login-card label { display: block; margin: 1rem 0 .2rem; font-weight: 600; font-size: .85rem; }
+  .login-card input { width: 100%; }
+  .login-card .btn { margin-top: 1.2rem; padding: .75rem; }
+  .demo { margin-top: 1.6rem; padding-top: 1rem; border-top: 1px dashed #ddd6fe; }
+  .demo p { margin: 0 0 .5rem; font-size: .82rem; }
+  .demo-chip { margin: .15rem; padding: .35rem .8rem; border-radius: 999px; border: 1px solid #c7d2fe;
+               background: #f5f3ff; color: var(--g1); cursor: pointer; font-size: .8rem; font-weight: 600; }
+  .demo-chip:hover { background: var(--g1); color: #fff; }
+
+  /* App layout */
+  .layout { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+  .sidebar { background: linear-gradient(180deg, #1e1b4b, #312e81 60%, #4c1d95); color: #e0e7ff; padding: 1.2rem;
+             display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+  .logo { font-size: 1.3rem; font-weight: 800; margin: .3rem 0 1.5rem; }
+  .nav-btn { display: flex; gap: .6rem; align-items: center; width: 100%; padding: .75rem .9rem; border: 0;
+             border-radius: 12px; background: transparent; color: #c7d2fe; font-size: .95rem; cursor: pointer;
+             text-align: left; margin: .15rem 0; }
+  .nav-btn:hover { background: rgba(255,255,255,.08); }
+  .nav-btn.active { background: linear-gradient(90deg, var(--g1), var(--g2)); color: #fff;
+                    box-shadow: 0 6px 18px rgba(168,85,247,.4); }
+  .user-card { margin-top: auto; background: rgba(255,255,255,.08); border-radius: 14px; padding: .9rem; }
+  .user-row { display: flex; gap: .7rem; align-items: center; margin-bottom: .8rem; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center;
+            font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--g3), var(--g2)); }
+  .who-email { font-size: .82rem; word-break: break-all; }
+  .role-pill { display: inline-block; margin-top: .2rem; padding: .1rem .55rem; border-radius: 999px; font-size: .7rem;
+               font-weight: 700; background: rgba(255,255,255,.18); text-transform: uppercase; letter-spacing: .5px; }
+  .content { padding: 1.6rem 2rem; min-width: 0; }
+  .top h2 { margin: 0; font-size: 1.6rem; }
+  .top p { margin: .2rem 0 1.2rem; }
+
+  /* Stat tiles */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .stat { border-radius: 16px; padding: 1.1rem 1.2rem; color: #fff; position: relative; overflow: hidden;
+          box-shadow: 0 12px 26px rgba(99,102,241,.25); }
+  .s1 { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .s2 { background: linear-gradient(135deg, #06b6d4, #3b82f6); }
+  .s3 { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+  .s4 { background: linear-gradient(135deg, #f59e0b, #f97316); }
+  .stat span { font-size: .75rem; text-transform: uppercase; letter-spacing: .8px; opacity: .92; }
+  .stat b { display: block; font-size: 2rem; margin-top: .2rem; }
+  .stat i { position: absolute; right: 12px; top: 8px; font-size: 2.2rem; opacity: .3; font-style: normal; }
+
+  /* Cards */
+  .card { background: #fff; border-radius: 16px; padding: 1.2rem 1.3rem; margin-top: 1.1rem;
+          box-shadow: 0 6px 22px rgba(99,102,241,.08); border: 1px solid var(--line); }
+  .card h3 { margin: 0 0 .9rem; font-size: 1.05rem; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .drop { border: 2px dashed #c4b5fd; border-radius: 14px; padding: 1.4rem; text-align: center; background: #faf5ff;
+          cursor: pointer; transition: .2s; }
+  .drop:hover, .drop.over { background: #ede9fe; border-color: var(--g2); }
+  .drop b { color: var(--g1); }
+  .chip { padding: .38rem .95rem; border-radius: 999px; border: 1px solid #c7d2fe; background: #fff; cursor: pointer;
+          font-size: .85rem; color: var(--g1); font-weight: 600; }
+  .chip.active { background: var(--g1); color: #fff; border-color: var(--g1); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; margin-top: .8rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: .7rem; font-size: .75rem; text-transform: uppercase; letter-spacing: .6px;
+       color: var(--g1); background: #f5f3ff; }
+  th:first-child { border-radius: 10px 0 0 10px; } th:last-child { border-radius: 0 10px 10px 0; }
+  td { padding: .7rem; border-bottom: 1px solid #f0edff; vertical-align: middle; }
+  tbody tr:hover { background: #faf8ff; }
+  tr.denied { background: #fef2f2; }
+  .fname { display: flex; align-items: center; gap: .65rem; font-weight: 600; }
+  .ficon { width: 36px; height: 36px; border-radius: 10px; background: #ede9fe; display: grid; place-items: center; flex: none; }
+  .badge { display: inline-block; padding: .18rem .65rem; border-radius: 999px; font-size: .74rem; font-weight: 700;
+           background: #e5e7eb; color: #374151; }
+  .b-owner { background: #ede9fe; color: #6d28d9; } .b-read, .b-allowed { background: #dcfce7; color: #15803d; }
+  .b-edit { background: #fef3c7; color: #b45309; } .b-denied { background: #fee2e2; color: #b91c1c; }
+  .empty { text-align: center; color: var(--muted); padding: 2.2rem 1rem; }
+  .empty div { font-size: 2.4rem; }
+  #summary { background: #fffbeb; border: 1px solid #fde68a; padding: .6rem .9rem; border-radius: 10px; margin: 0 0 .9rem; }
+  #verifyResult { font-weight: 700; margin-left: .4rem; }
+  .ok-text { color: #15803d; } .bad-text { color: #b91c1c; }
+
+  /* Modal */
+  .modal { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: grid; place-items: center; z-index: 20;
+           backdrop-filter: blur(3px); }
+  .modal-card { background: #fff; border-radius: 18px; padding: 1.4rem; width: 500px; max-width: 94vw;
+                box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
+  .modal-head h3 { margin: 0; }
+  #grants { list-style: none; padding: 0; margin: 0 0 1rem; }
+  #grants li { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; background: #faf8ff;
+               border-radius: 10px; margin: .35rem 0; }
+  #grants li span.em { flex: 1; word-break: break-all; }
+
+  @media (max-width: 900px) {
+    .login { grid-template-columns: 1fr; } .hero { display: none; }
+    .layout { grid-template-columns: 1fr; } .sidebar { position: static; height: auto; }
+    .stats { grid-template-columns: repeat(2, 1fr); } .content { padding: 1rem; }
+  }
 </style>
 </head>
 <body>
-<h1>TrustVault</h1>
-<p id="msg"></p>
+<div id="toasts"></div>
 
-<section id="login">
-  <input id="email" placeholder="email" autocomplete="username">
-  <input id="password" type="password" placeholder="password" autocomplete="current-password">
-  <button id="loginBtn">Login</button>
+<section id="login" class="login">
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="logo-big">🔐 TrustVault</div>
+      <h1>Share documents.<br>Prove who opened them.</h1>
+      <ul class="points">
+        <li>🛡️ Every access is checked on the server, every time</li>
+        <li>🧾 Tamper-evident audit trail, refused attempts included</li>
+        <li>⚡ Revoke access and it stops immediately</li>
+        <li>🔒 Files stored encrypted</li>
+      </ul>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="login-card">
+      <h2>Welcome back 👋</h2>
+      <p class="muted">Sign in to continue</p>
+      <label for="email">Email</label>
+      <input id="email" placeholder="you@company.com" autocomplete="username">
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+      <button id="loginBtn" class="btn wide">Sign in</button>
+      <div class="demo">
+        <p>Demo accounts (click to fill):</p>
+        <div id="demoChips"></div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section id="app" hidden>
-  <p><b id="who"></b> <button id="logout">Logout (all devices)</button></p>
-  <div id="ownerTools">
-    <input id="file" type="file">
-    <input id="category" placeholder="category (optional)">
-    <button id="upload">Upload</button>
-  </div>
-  <div>
-    <input id="q" placeholder="search name">
-    <input id="cat" placeholder="category">
-    <button id="search">Search</button>
-  </div>
-  <table>
-    <thead><tr><th>Name</th><th>Owner</th><th>Category</th><th>Access</th><th></th></tr></thead>
-    <tbody id="docs"></tbody>
-  </table>
-  <div id="share" hidden>
-    <h3>Access to: <span id="shareTitle"></span></h3>
+<div id="app" class="layout" hidden>
+  <aside class="sidebar">
+    <div class="logo">🔐 TrustVault</div>
+    <nav>
+      <button class="nav-btn" id="navDocs" data-view="docs">📁 <span>Documents</span></button>
+      <button class="nav-btn" id="navActivity" data-view="activity">📊 <span>Activity</span></button>
+    </nav>
+    <div class="user-card">
+      <div class="user-row">
+        <div class="avatar" id="avatar"></div>
+        <div><div class="who-email" id="whoEmail"></div><span class="role-pill" id="whoRole"></span></div>
+      </div>
+      <button id="logout" class="btn btn-ghost wide small">Logout (all devices)</button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="top">
+      <h2 id="viewTitle"></h2>
+      <p id="viewSub" class="muted"></p>
+    </header>
+
+    <div class="stats">
+      <div class="stat s1"><i id="stI1"></i><span id="stL1"></span><b id="stV1">0</b></div>
+      <div class="stat s2"><i id="stI2"></i><span id="stL2"></span><b id="stV2">0</b></div>
+      <div class="stat s3"><i id="stI3"></i><span id="stL3"></span><b id="stV3">0</b></div>
+      <div class="stat s4"><i id="stI4"></i><span id="stL4"></span><b id="stV4">0</b></div>
+    </div>
+
+    <div id="viewDocs">
+      <div id="ownerTools" class="card">
+        <h3>⬆️ Upload a document</h3>
+        <div id="drop" class="drop">
+          <div style="font-size:2rem">📤</div>
+          <div><b>Click to choose</b> or drag a file here</div>
+          <div class="muted" id="fileName">PDF, PNG, JPG or TXT, up to 5 MB</div>
+          <input id="file" type="file" hidden>
+        </div>
+        <div class="toolbar" style="margin-top:.8rem">
+          <input id="category" placeholder="Category (optional)">
+          <button id="upload" class="btn">Upload</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📚 Documents</h3>
+        <div class="toolbar">
+          <input id="q" placeholder="🔍 Search by name">
+          <input id="cat" placeholder="Category">
+          <button id="search" class="btn">Search</button>
+          <span style="flex:1"></span>
+          <button class="chip active" data-mode="all">All</button>
+          <button class="chip" data-mode="owner">Owned</button>
+          <button class="chip" data-mode="shared">Shared with me</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Owner</th><th>Category</th><th>Size</th><th>Access</th><th>Actions</th></tr></thead>
+            <tbody id="docs"></tbody>
+          </table>
+        </div>
+        <div id="docsEmpty" class="empty" hidden><div>🗂️</div>No documents to show</div>
+      </div>
+    </div>
+
+    <div id="viewActivity" hidden>
+      <div class="card">
+        <h3>🧭 Activity and permission changes</h3>
+        <p id="summary" hidden></p>
+        <div class="toolbar">
+          <select id="fOutcome"><option value="">All outcomes</option><option>denied</option><option>allowed</option></select>
+          <input id="fAction" placeholder="Action, e.g. grant">
+          <button id="fSearch" class="btn">Filter</button>
+          <button id="verify" class="btn btn-ghost">✅ Verify audit chain</button>
+          <span id="verifyResult"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Outcome</th><th>Document</th><th>Target</th><th>IP</th><th>Details</th></tr></thead>
+            <tbody id="audit"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>🔑 Access to: <span id="shareTitle"></span></h3>
+      <button id="closeModal" class="btn btn-ghost small">Close</button>
+    </div>
     <ul id="grants"></ul>
-    <input id="gemail" placeholder="user email">
-    <select id="gperm"><option>read</option><option>edit</option></select>
-    <button id="grant">Grant</button>
+    <div class="toolbar">
+      <input id="gemail" placeholder="User email" style="flex:1">
+      <select id="gperm"><option>read</option><option>edit</option></select>
+      <button id="grant" class="btn">Grant</button>
+    </div>
   </div>
-</section>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
