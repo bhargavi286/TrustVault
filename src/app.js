@@ -3,6 +3,7 @@ const express = require('express');
 const helmet = require('helmet');
 
 const app = express();
+app.set('trust proxy', 1); // Render puts exactly one proxy in front of the app
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
