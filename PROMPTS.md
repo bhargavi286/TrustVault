@@ -52,6 +52,17 @@ These came from the first planning message and I held the code to them:
 - Wrong: the storage design did not fit the hosting. This was caught by the AI at planning time, not by me.
 - Did instead: the encrypted bytes now live in a `file_blobs` table in PostgreSQL, still AES-256-GCM encrypted. I updated the "stored file bytes do not contain the plain text" test to read from the database. Commit: 4851f75
 
+### YYYY-MM-DD: a download recorded as "allowed" even when nothing was delivered (audit trail)
+- Asked: the download route, with every decision written to the audit log.
+- Produced: `authorize()` wrote the "allowed" record first, and the route read the file afterwards.
+- Wrong: when I asked Claude to re-read its own code it flagged the order. If reading the file fails, the audit trail says "allowed" while the user got a 500, so the record disagrees with what happened. I wrote a test first that deletes a document's stored bytes and then downloads it. It failed (`Expected: 0, Received: 1`), which proved the problem was real.
+- Did instead: `authorize()` takes `{ deferAllowed: true }` and the route calls `recordAllowed()` only after the file was read. A failed read is recorded as refused with the reason `storage_read_failed`. Commit: 29cb7d2
+
+### YYYY-MM-DD: the fix did not run, and a weak test hid a missing route (access control)
+- Asked: Claude to replace the download route with the fixed one.
+- Produced: edit instructions that were ambiguous. I pasted the new route in, but the old download route was still in the file, and the route that lists who has access was gone.
+- Wrong: the test still failed after the fix, with the same line number in the stack trace as before. Searching for the route definitions showed two `/:id/download` routes. Express uses the first one, so the old code kept running. The test "non-owner cannot see or change who has access" still passed with the access-list route missing, because a missing route also answers 404. The test could not tell "refused" from "does not exist".
+- Did instead: replaced the whole file so there is one route per path, and added a test that the owner can list who has access. Commit: 29cb7d2
 ## Known gaps I have not fixed yet
 
 - Downloads write the "allowed" audit record before the file is read (THREATS.md T7).

@@ -33,9 +33,9 @@ Format: threat, what I did, status (closed / partly closed / knowingly accepted)
 - Status: partly closed.
 
 ## T7. A refused action goes unrecorded, or the record disagrees with what happened
-- Did: authorize() writes the audit record for every decision, allowed or refused, before the answer is sent. If the audit write fails, the request fails, so there is no access without a record. Upload and grant changes write their audit row in the same transaction as the change.
-- Known weakness, not fixed: for downloads the "allowed" record is written before the file is read. If reading the file then failed, the log would say allowed while the user got an error.
-- Status: partly closed.
+- Did: authorize() writes the audit record for every decision. If the audit write fails, the request fails, so there is no access without a record. Upload and grant changes write their audit row in the same transaction as the change. A download is recorded as "allowed" only after the file was read; if the read fails it is recorded as refused with the reason storage_read_failed (tested).
+- Knowingly accepted: the record is written after the file is read and before it is sent. If the connection drops while the file is being sent, the server cannot know the user did not receive it.
+- Status: closed apart from the dropped-connection case.
 
 ## T8. Guessing passwords
 - Did: bcrypt with cost 12, 10 login attempts per 15 minutes per client address, the same error message and a dummy hash comparison for unknown emails so neither the message nor the response time shows which emails exist. Every failed login is recorded with the reason.
