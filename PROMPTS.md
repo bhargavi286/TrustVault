@@ -65,5 +65,5 @@ These came from the first planning message and I held the code to them:
 - Did instead: replaced the whole file so there is one route per path, and added a test that the owner can list who has access. Commit: 29cb7d2
 ## Known gaps I have not fixed yet
 
-- Downloads write the "allowed" audit record before the file is read (THREATS.md T7).
+
 - The app connects to the database as the owner role, so the audit triggers could be dropped by someone with that role (THREATS.md T6).
