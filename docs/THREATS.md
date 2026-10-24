@@ -25,3 +25,49 @@ Format: threat, what I did, status (closed / partly closed / knowingly accepted)
 - Did: no permissions live in the token. The grant is read from the database on every request, so a revoke applies to the very next request with the same token. logout-all and is_active=false also take effect immediately.
 - Proof: test "revoke works immediately with the same token", and the logout-all test.
 - Status: closed.
+
+## T6. The audit trail is rewritten by someone with full database access
+- Did: hash chain, so editing, removing or reordering a record in the middle is detected by "Verify audit chain" on the admin page.
+- Knowingly accepted: the chain only proves the records are consistent with each other. Someone with the database owner role could rewrite everything and recompute every hash, or delete the newest records, and the chain would still verify. The app connects with the same owner role that created the tables.
+- Would do next: run the app as a role that has only INSERT and SELECT on audit_log, and copy the latest hash somewhere the database owner cannot reach.
+- Status: partly closed.
+
+## T7. A refused action goes unrecorded, or the record disagrees with what happened
+- Did: authorize() writes the audit record for every decision, allowed or refused, before the answer is sent. If the audit write fails, the request fails, so there is no access without a record. Upload and grant changes write their audit row in the same transaction as the change.
+- Known weakness, not fixed: for downloads the "allowed" record is written before the file is read. If reading the file then failed, the log would say allowed while the user got an error.
+- Status: partly closed.
+
+## T8. Guessing passwords
+- Did: bcrypt with cost 12, 10 login attempts per 15 minutes per client address, the same error message and a dummy hash comparison for unknown emails so neither the message nor the response time shows which emails exist. Every failed login is recorded with the reason.
+- Knowingly accepted: the limit is per address, not per account, and lives in the server's memory, so it resets when the server restarts and does not stop an attacker who rotates addresses. There is no account lockout, because lockout lets anyone lock a colleague out. No password complexity rules or two-factor sign-in.
+- Status: partly closed.
+
+## T9. A stolen or forged token
+- Did: tokens expire after one hour, only HS256 is accepted (a token with algorithm "none" is rejected, tested), the secret must be at least 32 characters or the server refuses to start. The user is loaded from the database on every request, so a role change, deactivation or "Logout (all devices)" applies immediately.
+- Knowingly accepted: the token is kept in sessionStorage, so a script injection would be able to read it. Mitigation: the interface writes all user-controlled text with textContent, never as HTML, and helmet sets a Content-Security-Policy. I chose this over cookies to avoid CSRF. There is no way to revoke a single token, only all of a user's tokens.
+- Status: partly closed.
+
+## T10. Uploading something harmful, or something that fills the system
+- Did: allowed types are PDF, PNG, JPG and TXT, checked by extension and by the real first bytes. 5 MB limit, one file per request. File names are stripped of paths and unusual characters. Files are stored under a random name, encrypted (AES-256-GCM), and always served as a download with a generic content type, never displayed by the browser.
+- Knowingly accepted: no virus scanning. A TXT check only rejects binary content. No per-user storage quota, so an owner could fill the database with many 5 MB files.
+- Status: partly closed.
+
+## T11. Probing which documents exist
+- Did: ids are random UUIDs, a malformed id and a refused id return the same 404 as a missing document (tested), and search returns only what the user may see because the filter is inside the SQL.
+- Knowingly accepted: a refused request and a missing one do slightly different database work, so a very precise timing measurement could in theory tell them apart. Owners can also tell whether an email belongs to an active non-admin user, because granting to it succeeds or fails. They need that to share at all.
+- Status: partly closed.
+
+## T12. Secrets and keys
+- Did: no secrets in the repository (checked with git ls-files), all secrets are environment variables, database connection uses verified TLS.
+- Knowingly accepted: one encryption key for all files, no rotation. If STORAGE_KEY is lost the files cannot be opened. The demo passwords are public, on purpose, because the challenge needs credentials in the README. They protect fake data only.
+- Status: partly closed.
+
+## T13. Tests run against the live database
+- Known weakness: the tests use the same Neon database as the deployed system, so test documents and audit rows can appear in the live system. Documents are cleaned up after the tests, audit rows cannot be deleted by design.
+- Would do next: a separate database for tests.
+- Status: knowingly accepted.
+
+## T14. Features that do not exist yet
+- Edit and delete endpoints are not built, so the "edit" permission is stored but nothing uses it yet. Deactivating a user has no endpoint (is_active exists in the database). No sharing with people outside the company, versions, retention, or AI suggestions.
+- Each of these will go through authorize() when built. Until then there is nothing to attack, but there is also no feature.
+- Status: not built.
