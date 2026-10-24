@@ -23,9 +23,12 @@ async function decide(user, doc, action) {
   return false;
 }
 
-// Returns the document if allowed, otherwise null. Always writes an audit record.
-// If the audit write fails, the request fails too (no access without a record).
-async function authorize(req, docId, action) {
+// Returns the document if allowed, otherwise null. Refusals are always recorded.
+// By default an allowed decision is recorded here too. Pass { deferAllowed: true } when the
+// action can still fail after the decision (for example reading the file); the caller must
+// then call recordAllowed() once the action has really succeeded.
+// If an audit write fails, the request fails too (no access without a record).
+async function authorize(req, docId, action, options = {}) {
   if (!ACTIONS.includes(action)) throw new Error('unknown action: ' + action);
 
   let doc = null;
@@ -35,18 +38,31 @@ async function authorize(req, docId, action) {
   }
   const allowed = doc ? await decide(req.user, doc, action) : false;
 
-  await logEvent({
-    actorId: req.user.id,
-    action: `document.${action}`,
-    outcome: allowed ? 'allowed' : 'denied',
-    documentId: doc ? doc.id : null,
-    ip: req.ip,
-    details: allowed
-      ? {}
-      : { reason: doc ? 'no_permission' : 'not_found_or_invalid_id', requested_id: String(docId).slice(0, 64) },
-  });
+  if (!allowed || options.deferAllowed !== true) {
+    await logEvent({
+      actorId: req.user.id,
+      action: `document.${action}`,
+      outcome: allowed ? 'allowed' : 'denied',
+      documentId: doc ? doc.id : null,
+      ip: req.ip,
+      details: allowed
+        ? {}
+        : { reason: doc ? 'no_permission' : 'not_found_or_invalid_id', requested_id: String(docId).slice(0, 64) },
+    });
+  }
 
   return allowed ? doc : null;
 }
 
-module.exports = { authorize };
+async function recordAllowed(req, doc, action, details = {}) {
+  await logEvent({
+    actorId: req.user.id,
+    action: `document.${action}`,
+    outcome: 'allowed',
+    documentId: doc.id,
+    ip: req.ip,
+    details,
+  });
+}
+
+module.exports = { authorize, recordAllowed };

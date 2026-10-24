@@ -1,8 +1,6 @@
 process.env.LOGIN_RATE_MAX = '1000'; // so tests do not hit the login rate limit
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
-const path = require('path');
 const app = require('../src/app');
 const pool = require('../src/db');
 const storage = require('../src/services/storage');
@@ -24,6 +22,8 @@ async function login(email, password) {
 const auth = (token) => ({ Authorization: `Bearer ${token}` });
 const download = (token, id = docId) => request(app).get(`/api/documents/${id}/download`).set(auth(token));
 const meId = async (token) => (await request(app).get('/api/auth/me').set(auth(token))).body.id;
+
+// Downloads are application/octet-stream, so read the body as raw bytes
 const binary = (res, cb) => {
   const chunks = [];
   res.on('data', (c) => chunks.push(c));
@@ -94,7 +94,7 @@ describe('authentication', () => {
 });
 
 describe('one user cannot reach another user\'s document', () => {
-    test('owner can download her own document', async () => {
+  test('owner can download her own document', async () => {
     const res = await download(t.alice).buffer(true).parse(binary);
     expect(res.status).toBe(200);
     expect(res.body.toString()).toBe(SECRET_TEXT);
@@ -181,6 +181,19 @@ describe('granting and taking access away', () => {
     expect(list.body.find((d) => d.id === docId)).toBeUndefined();
   });
 
+    test('owner can list who has access', async () => {
+    const grant = await request(app)
+      .post(`/api/documents/${docId}/grants`)
+      .set(auth(t.alice))
+      .send({ email: 'carol@trustvault.test', permission: 'read' });
+    expect(grant.status).toBe(201);
+
+    const res = await request(app).get(`/api/documents/${docId}/grants`).set(auth(t.alice));
+    expect(res.status).toBe(200);
+    expect(res.body.map((g) => g.email)).toContain('carol@trustvault.test');
+
+    await request(app).delete(`/api/documents/${docId}/grants/${ids.carol}`).set(auth(t.alice));
+  });
   test('cannot grant to admin or to yourself', async () => {
     for (const email of ['admin@trustvault.test', 'alice@trustvault.test']) {
       const res = await request(app)
@@ -222,7 +235,7 @@ describe('uploads', () => {
     await storage.remove(row.rows[0].storage_key);
   });
 
-    test('stored file bytes do not contain the plain text', async () => {
+  test('stored file bytes do not contain the plain text', async () => {
     const { rows } = await pool.query('SELECT data FROM file_blobs WHERE storage_key = $1', [storageKey]);
     expect(rows.length).toBe(1);
     expect(rows[0].data.includes(Buffer.from(SECRET_TEXT))).toBe(false);
@@ -238,6 +251,34 @@ describe('audit trail', () => {
       [docId, ids.bob]
     );
     expect(log.rowCount).toBeGreaterThan(0);
+  });
+
+  test('if the stored file cannot be read, no "allowed" download is recorded', async () => {
+    const up = await request(app)
+      .post('/api/documents')
+      .set(auth(t.alice))
+      .attach('file', Buffer.from('will lose its bytes'), { filename: 'lost.txt', contentType: 'text/plain' });
+    expect(up.status).toBe(201);
+    const row = await pool.query('SELECT storage_key FROM documents WHERE id = $1', [up.body.id]);
+    await pool.query('DELETE FROM file_blobs WHERE storage_key = $1', [row.rows[0].storage_key]);
+
+    const res = await download(t.alice, up.body.id);
+    expect(res.status).toBe(500);
+
+    const allowed = await pool.query(
+      `SELECT 1 FROM audit_log WHERE action = 'document.download' AND outcome = 'allowed' AND document_id = $1`,
+      [up.body.id]
+    );
+    expect(allowed.rowCount).toBe(0);
+
+    const failed = await pool.query(
+      `SELECT 1 FROM audit_log WHERE action = 'document.download' AND outcome = 'denied'
+       AND document_id = $1 AND details->>'reason' = 'storage_read_failed'`,
+      [up.body.id]
+    );
+    expect(failed.rowCount).toBe(1);
+
+    await pool.query('DELETE FROM documents WHERE id = $1', [up.body.id]);
   });
 
   test('grant and revoke are recorded', async () => {

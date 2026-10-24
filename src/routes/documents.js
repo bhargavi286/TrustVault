@@ -4,12 +4,14 @@ const path = require('path');
 const crypto = require('crypto');
 const pool = require('../db');
 const { authenticate, requireRole } = require('../middleware/auth');
-const { authorize } = require('./../services/access');
+const { authorize, recordAllowed } = require('../services/access');
 const { logEvent } = require('../services/audit');
 const storage = require('../services/storage');
 
 const router = express.Router();
 const MAX_BYTES = 5 * 1024 * 1024;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PERMISSIONS = ['read', 'edit'];
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -33,6 +35,14 @@ function cleanName(original) {
   return safe || 'file';
 }
 
+const likeEscape = (s) => s.replace(/[\\%_]/g, '\\$&');
+
+function validDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 async function refuseUpload(req, res, status, reason) {
   await logEvent({
     actorId: req.user.id,
@@ -44,6 +54,7 @@ async function refuseUpload(req, res, status, reason) {
   return res.status(status).json({ error: 'Upload rejected: ' + reason });
 }
 
+/* ---------- Upload (owner role only) ---------- */
 // Order matters: log in, check role, only then read the upload body.
 router.post(
   '/',
@@ -111,32 +122,8 @@ router.post(
   }
 );
 
-router.get('/:id/download', authenticate, async (req, res, next) => {
-  try {
-    const doc = await authorize(req, req.params.id, 'download');
-    if (!doc) return res.status(404).json({ error: 'Not found' });
-
-    const data = await storage.read(doc.storage_key);
-    res.attachment(doc.name);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(data);
-  } catch (err) {
-    next(err);
-  }
-});
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PERMISSIONS = ['read', 'edit'];
-
-const likeEscape = (s) => s.replace(/[\\%_]/g, '\\$&');
-
-function validDate(s) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s + 'T00:00:00Z');
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
-
-// List + search. The permission filter is inside the SQL itself:
+/* ---------- List and search ---------- */
+// The permission filter is inside the SQL itself:
 // a user only ever gets documents they own or hold an active grant for.
 router.get('/', authenticate, async (req, res, next) => {
   try {
@@ -192,7 +179,41 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-// Who has access to this document (owner only)
+/* ---------- Download ---------- */
+router.get('/:id/download', authenticate, async (req, res, next) => {
+  try {
+    // The "allowed" record is deferred until the file has really been read
+    const doc = await authorize(req, req.params.id, 'download', { deferAllowed: true });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    let data;
+    try {
+      data = await storage.read(doc.storage_key);
+    } catch (err) {
+      // Permission was fine but nothing was delivered: record that, not "allowed"
+      await logEvent({
+        actorId: req.user.id,
+        action: 'document.download',
+        outcome: 'denied',
+        documentId: doc.id,
+        ip: req.ip,
+        details: { reason: 'storage_read_failed' },
+      }).catch(() => {});
+      throw err;
+    }
+    await recordAllowed(req, doc, 'download'); // written before any byte is sent
+
+    res.attachment(doc.name);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------- Sharing (owner only) ---------- */
+// Who has access to this document
 router.get('/:id/grants', authenticate, async (req, res, next) => {
   try {
     const doc = await authorize(req, req.params.id, 'share');
@@ -210,7 +231,7 @@ router.get('/:id/grants', authenticate, async (req, res, next) => {
   }
 });
 
-// Grant (or change) access. Owner only.
+// Grant (or change) access
 router.post('/:id/grants', authenticate, async (req, res, next) => {
   try {
     const doc = await authorize(req, req.params.id, 'share');
