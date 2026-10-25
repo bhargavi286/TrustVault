@@ -329,5 +329,109 @@ router.delete('/:id/grants/:userId', authenticate, async (req, res, next) => {
     next(err);
   }
 });
+/* ---------- Edit and delete ---------- */
+// Rename or re-categorise. Owner, or someone holding an 'edit' grant.
+router.patch('/:id', authenticate, async (req, res, next) => {
+  try {
+    const doc = await authorize(req, req.params.id, 'edit', { deferAllowed: true });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const body = req.body || {};
+    const changes = {};
+    if (body.name !== undefined) {
+      if (typeof body.name !== 'string' || !body.name.trim()) return res.status(400).json({ error: 'Bad name' });
+      const name = cleanName(body.name.trim());
+      if (path.extname(name).toLowerCase() !== path.extname(doc.name).toLowerCase()) {
+        return res.status(400).json({ error: 'The file extension cannot be changed' });
+      }
+      changes.name = name;
+    }
+    if (body.category !== undefined) {
+      if (typeof body.category !== 'string' || !/^[\w &-]{1,50}$/.test(body.category.trim())) {
+        return res.status(400).json({ error: 'Bad category' });
+      }
+      changes.category = body.category.trim();
+    }
+    if (!Object.keys(changes).length) return res.status(400).json({ error: 'Nothing to change' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `UPDATE documents
+         SET name = COALESCE($2, name), category = COALESCE($3, category), updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING id, name, category, size_bytes, updated_at`,
+        [doc.id, changes.name || null, changes.category || null]
+      );
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Not found' });
+      }
+      await logEvent(
+        {
+          actorId: req.user.id,
+          action: 'document.edit',
+          outcome: 'allowed',
+          documentId: doc.id,
+          ip: req.ip,
+          details: { before: { name: doc.name, category: doc.category }, after: changes },
+        },
+        client
+      );
+      await client.query('COMMIT');
+      res.json(rows[0]);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete. Owner only. The document is hidden everywhere; the encrypted bytes are kept
+// so it can be recovered, and the audit trail keeps the record.
+router.delete('/:id', authenticate, async (req, res, next) => {
+  try {
+    const doc = await authorize(req, req.params.id, 'delete', { deferAllowed: true });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rowCount } = await client.query(
+        'UPDATE documents SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL',
+        [doc.id]
+      );
+      if (!rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Not found' });
+      }
+      await logEvent(
+        {
+          actorId: req.user.id,
+          action: 'document.delete',
+          outcome: 'allowed',
+          documentId: doc.id,
+          ip: req.ip,
+          details: { name: doc.name },
+        },
+        client
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;

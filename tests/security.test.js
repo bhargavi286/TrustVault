@@ -298,3 +298,77 @@ describe('audit trail', () => {
     await expect(pool.query('DELETE FROM audit_log')).rejects.toThrow(/append-only/);
   });
 });
+describe('edit and delete', () => {
+  let doc2;
+
+  beforeAll(async () => {
+    const up = await request(app)
+      .post('/api/documents')
+      .set(auth(t.alice))
+      .attach('file', Buffer.from('editable'), { filename: 'draft.txt', contentType: 'text/plain' });
+    expect(up.status).toBe(201);
+    doc2 = up.body.id;
+  });
+
+  afterAll(async () => {
+    const row = await pool.query('SELECT storage_key FROM documents WHERE id = $1', [doc2]);
+    await pool.query('DELETE FROM grants WHERE document_id = $1', [doc2]);
+    await pool.query('DELETE FROM documents WHERE id = $1', [doc2]);
+    await storage.remove(row.rows[0].storage_key);
+  });
+
+  const patch = (token, body) => request(app).patch(`/api/documents/${doc2}`).set(auth(token)).send(body);
+  const del = (token) => request(app).delete(`/api/documents/${doc2}`).set(auth(token));
+
+  test('a user without a grant cannot edit or delete', async () => {
+    expect((await patch(t.bob, { name: 'hacked.txt' })).status).toBe(404);
+    expect((await del(t.bob)).status).toBe(404);
+    expect((await download(t.alice, doc2)).status).toBe(200); // still there, name unchanged
+  });
+
+  test('admin cannot edit or delete', async () => {
+    expect((await patch(t.admin, { category: 'x' })).status).toBe(404);
+    expect((await del(t.admin)).status).toBe(404);
+  });
+
+  test('read grant cannot edit or delete; edit grant can edit but not delete', async () => {
+    const give = (permission) =>
+      request(app)
+        .post(`/api/documents/${doc2}/grants`)
+        .set(auth(t.alice))
+        .send({ email: 'carol@trustvault.test', permission });
+
+    expect((await give('read')).status).toBe(201);
+    expect((await patch(t.carol, { name: 'carol.txt' })).status).toBe(404);
+    expect((await del(t.carol)).status).toBe(404);
+
+    expect((await give('edit')).status).toBe(201);
+    const renamed = await patch(t.carol, { name: 'final.txt' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe('final.txt');
+    expect((await patch(t.carol, { name: 'final.exe' })).status).toBe(400); // extension is fixed
+    expect((await del(t.carol)).status).toBe(404); // delete stays owner only
+
+    const log = await pool.query(
+      `SELECT 1 FROM audit_log WHERE action = 'document.edit' AND outcome = 'allowed'
+       AND document_id = $1 AND actor_id = $2`,
+      [doc2, ids.carol]
+    );
+    expect(log.rowCount).toBeGreaterThan(0);
+
+    await request(app).delete(`/api/documents/${doc2}/grants/${ids.carol}`).set(auth(t.alice));
+    expect((await patch(t.carol, { name: 'again.txt' })).status).toBe(404); // revoked
+  });
+
+  test('owner delete hides the document everywhere and is recorded', async () => {
+    expect((await del(t.alice)).status).toBe(200);
+    expect((await download(t.alice, doc2)).status).toBe(404);
+    const list = await request(app).get('/api/documents').set(auth(t.alice));
+    expect(list.body.find((d) => d.id === doc2)).toBeUndefined();
+    const log = await pool.query(
+      `SELECT 1 FROM audit_log WHERE action = 'document.delete' AND outcome = 'allowed' AND document_id = $1`,
+      [doc2]
+    );
+    expect(log.rowCount).toBeGreaterThan(0);
+  });
+});
