@@ -18,7 +18,7 @@ Format: threat, what I did, status (closed / partly closed / knowingly accepted)
 ## T4. A user reaches a document that was not granted to them (IDOR, forgotten check, other roles)
 - Did: every document route calls authorize() in src/services/access.js, which defaults to deny. Not-granted and not-existing both return the same 404, so ids cannot be probed. Admin has no content access. Grants are checked in the database on every request. List and search filter by grant inside the SQL.
 - Proof: tests/security.test.js (cross-user download, list, search, grants, admin, viewer upload).
-- Mutation check: I forced decide() to return true. 8 of 23 tests failed (another owner, viewer, admin, re-share by a non-owner, audit of refusals). Reverted afterwards.
+- Mutation check: I forced decide() to return true. 11 of the 29 tests failed (another owner, viewer, admin and re-share by a non-owner, edit and delete without a grant, and the audit record of a refused download). The 18 that still passed are protected by other layers (the filter inside the SQL, the role check on upload, id validation) or do not involve authorize(), so they say nothing about it. Reverted afterwards.
 - Status: closed for the routes that exist today. Edit and delete endpoints are not built yet and will go through the same function.
 
 ## T5. Revoked access keeps working
