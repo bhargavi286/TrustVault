@@ -202,6 +202,17 @@
   ::-webkit-scrollbar-thumb { background: linear-gradient(#6366f1, #ec4899); border-radius: 99px; }
 
   @media (prefers-reduced-motion: reduce) { .hero { animation: none; } }
+    /* End screen shown after "Logout (all devices)" */
+  #bye { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; color: #fff; text-align: center; padding: 1rem;
+         background: linear-gradient(135deg, #0f766e, #2563eb 50%, #7e22ce);
+         animation: byeIn .4s ease, byeOut .5s ease 2.5s forwards; }
+  @keyframes byeIn { from { opacity: 0; } }
+  @keyframes byeOut { to { opacity: 0; } }
+  #bye .tick { font-size: 4rem; animation: byePop 1s ease infinite alternate; }
+  @keyframes byePop { to { transform: scale(1.15); } }
+  #bye h1 { margin: .6rem 0 .3rem; font-size: 2.2rem; }
+  #bye p { opacity: .9; margin: 0 0 1.4rem; max-width: 460px; }
 </style>
 </head>
 <body>
@@ -343,6 +354,13 @@
       <button id="grant" class="btn">Grant</button>
     </div>
   </div>
+</div>
+
+<div id="bye" hidden>
+  <div class="tick">🔒</div>
+  <h1>You are signed out</h1>
+  <p>Every login issued to your account has stopped working, and this sign-out is recorded in the audit log.</p>
+  <button id="byeBtn" class="btn">Sign in again</button>
 </div>
 
 <script src="app.js"></script>

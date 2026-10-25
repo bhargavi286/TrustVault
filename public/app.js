@@ -103,9 +103,17 @@ async function doLogin() {
 $('loginBtn').onclick = doLogin;
 $('password').addEventListener('keydown', (e) => e.key === 'Enter' && doLogin());
 $('logout').onclick = async () => {
+ function showBye() {
+  $('bye').hidden = false;
+  clearTimeout(showBye.timer);
+  showBye.timer = setTimeout(() => ($('bye').hidden = true), 3000);
+}
+$('byeBtn').onclick = () => ($('bye').hidden = true);
+$('logout').onclick = async () => {
   await api('/auth/logout-all', { method: 'POST' });
   showLogin();
-  toast('Signed out everywhere', 'ok');
+  showBye();
+};
 };
 
 async function start() {
