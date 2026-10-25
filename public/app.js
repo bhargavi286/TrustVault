@@ -182,16 +182,21 @@ function render() {
     tr.insertCell().textContent = d.category;
     tr.insertCell().textContent = fmt(Number(d.size_bytes));
     tr.insertCell().append(badge(d.my_permission));
+
+    // All action buttons sit in one flex row so they never stack
     const c = tr.insertCell();
+    const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-wrap:nowrap;gap:.4rem;align-items:center;';
     // The server decides what is really allowed. These buttons only mirror it.
-    c.append(btn('Download', () => download(d)));
+    box.append(btn('Download', () => download(d)));
     if (d.my_permission === 'owner' || d.my_permission === 'edit') {
-      c.append(' ', btn('Rename', () => editDoc(d), 'btn-ghost'));
+      box.append(btn('Rename', () => editDoc(d), 'btn-ghost'));
     }
     if (d.my_permission === 'owner') {
-      c.append(' ', btn('Access', () => openShare(d), 'btn-ghost'));
-      c.append(' ', btn('Delete', () => removeDoc(d), 'btn-danger'));
+      box.append(btn('Access', () => openShare(d), 'btn-ghost'));
+      box.append(btn('Delete', () => removeDoc(d), 'btn-danger'));
     }
+    c.append(box);
   }
 }
 for (const c of document.querySelectorAll('.chip')) {
