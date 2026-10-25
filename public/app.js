@@ -183,8 +183,15 @@ function render() {
     tr.insertCell().textContent = fmt(Number(d.size_bytes));
     tr.insertCell().append(badge(d.my_permission));
     const c = tr.insertCell();
+    // The server decides what is really allowed. These buttons only mirror it.
     c.append(btn('Download', () => download(d)));
-    if (d.my_permission === 'owner') c.append(' ', btn('Access', () => openShare(d), 'btn-ghost'));
+    if (d.my_permission === 'owner' || d.my_permission === 'edit') {
+      c.append(' ', btn('Rename', () => editDoc(d), 'btn-ghost'));
+    }
+    if (d.my_permission === 'owner') {
+      c.append(' ', btn('Access', () => openShare(d), 'btn-ghost'));
+      c.append(' ', btn('Delete', () => removeDoc(d), 'btn-danger'));
+    }
   }
 }
 for (const c of document.querySelectorAll('.chip')) {
@@ -206,6 +213,27 @@ async function download(d) {
   a.download = d.name;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ---------- Rename and delete ---------- */
+async function editDoc(d) {
+  const name = prompt('File name (keep the same extension):', d.name);
+  if (name === null) return;
+  const category = prompt('Category:', d.category);
+  if (category === null) return;
+  const res = await api(`/documents/${d.id}`, { method: 'PATCH', ...json({ name, category }) });
+  const out = await res.json();
+  if (!res.ok) return toast(out.error);
+  toast('Document updated', 'ok');
+  load();
+}
+
+async function removeDoc(d) {
+  if (!confirm(`Delete "${d.name}"? It will disappear for everyone who has access.`)) return;
+  const res = await api(`/documents/${d.id}`, { method: 'DELETE' });
+  if (!res.ok) return toast('Delete refused');
+  toast('Document deleted', 'ok');
+  load();
 }
 
 /* ---------- Upload ---------- */
