@@ -151,9 +151,28 @@
   #docs td { white-space: nowrap; }
   #docs td:first-child { white-space: normal; min-width: 180px; }
   #docs .btn.small { padding: .35rem .7rem; font-size: .8rem; }
+    /* Splash screen: pure CSS, fades out by itself after about 2.5 seconds */
+  #splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: #fff; text-align: center;
+            background: linear-gradient(135deg, #312e81, #7e22ce 55%, #db2777);
+            animation: splashOut .6s ease 2.4s forwards; }
+  @keyframes splashOut { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+  #splash .lock { font-size: 4rem; animation: pop 1s ease infinite alternate; }
+  @keyframes pop { to { transform: scale(1.15); } }
+  #splash h1 { margin: .6rem 0 .2rem; font-size: 2.4rem; }
+  #splash p { opacity: .85; margin: 0 0 1.4rem; }
+  #splash .bar { width: 220px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.25); overflow: hidden; }
+  #splash .bar i { display: block; height: 100%; width: 0; background: #fff; animation: fill 2.2s ease forwards; }
+  @keyframes fill { to { width: 100%; } }
 </style>
 </head>
 <body>
+  <div id="splash">
+  <div class="lock">🔐</div>
+  <h1>TrustVault</h1>
+  <p>Share documents. Prove who opened them.</p>
+  <div class="bar"><i></i></div>
+</div>
 <div id="toasts"></div>
 
 <section id="login" class="login">
