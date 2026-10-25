@@ -164,6 +164,44 @@
   #splash .bar { width: 220px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.25); overflow: hidden; }
   #splash .bar i { display: block; height: 100%; width: 0; background: #fff; animation: fill 2.2s ease forwards; }
   @keyframes fill { to { width: 100%; } }
+    /* Extra colour pass: CSS only */
+  body { background: linear-gradient(135deg, #f4f2ff, #e0f2fe 50%, #fdf2f8); background-attachment: fixed; }
+  .hero { background: linear-gradient(135deg, #312e81, #7e22ce, #db2777, #f59e0b); background-size: 300% 300%;
+          animation: flow 14s ease infinite; }
+  @keyframes flow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+  .panel { background: linear-gradient(160deg, #ffffff, #faf5ff); }
+
+  .sidebar { background: linear-gradient(180deg, #1e1b4b, #4c1d95 55%, #be185d); }
+  .logo { background: linear-gradient(90deg, #ffffff, #f0abfc, #fde68a); -webkit-background-clip: text;
+          background-clip: text; color: transparent; }
+  .avatar { box-shadow: 0 0 0 3px rgba(255, 255, 255, .35); }
+  .top h2 { background: linear-gradient(90deg, #4f46e5, #db2777); -webkit-background-clip: text;
+            background-clip: text; color: transparent; }
+
+  .card { position: relative; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+                  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #f59e0b); }
+  .stat { transition: transform .2s, box-shadow .2s; }
+  .stat:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 18px 34px rgba(99, 102, 241, .35); }
+  .drop { background: linear-gradient(135deg, #faf5ff, #eff6ff); }
+
+  .btn { background-size: 200% 100%; transition: background-position .3s, transform .12s, box-shadow .12s; }
+  .btn:hover { background-position: 100% 0; }
+  .chip.active { background: linear-gradient(90deg, #6366f1, #a855f7); }
+
+  #docs tr:nth-child(even) { background: #faf8ff; }
+  #docs tr:hover { background: linear-gradient(90deg, #eef2ff, #fdf2f8); }
+
+  .badge { color: #fff; }
+  .b-owner { background: linear-gradient(90deg, #8b5cf6, #ec4899); color: #fff; }
+  .b-read, .b-allowed { background: linear-gradient(90deg, #10b981, #06b6d4); color: #fff; }
+  .b-edit { background: linear-gradient(90deg, #f59e0b, #f97316); color: #fff; }
+  .b-denied { background: linear-gradient(90deg, #ef4444, #ec4899); color: #fff; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(#6366f1, #ec4899); border-radius: 99px; }
+
+  @media (prefers-reduced-motion: reduce) { .hero { animation: none; } }
 </style>
 </head>
 <body>
