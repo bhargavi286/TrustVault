@@ -67,7 +67,12 @@ Format: threat, what I did, status (closed / partly closed / knowingly accepted)
 - Would do next: a separate database for tests.
 - Status: knowingly accepted.
 
-## T14. Features that do not exist yet
-- Edit and delete endpoints are not built, so the "edit" permission is stored but nothing uses it yet. Deactivating a user has no endpoint (is_active exists in the database). No sharing with people outside the company, versions, retention, or AI suggestions.
-- Each of these will go through authorize() when built. Until then there is nothing to attack, but there is also no feature.
+## T14. Edit and delete
+- Did: both go through authorize() like every other document action. Edit needs the owner or an `edit` grant and changes only the name and category, never the contents or the file extension. Delete is owner only. Both are recorded in the audit log, including refused attempts. Tests cover: no grant, admin, read grant, edit grant, delete by an edit-grant holder (refused), revoke taking edit away immediately, and the deleted document disappearing from download and list.
+- Knowingly accepted: delete hides the document but keeps the encrypted bytes in the database, and there is no restore endpoint or retention rule yet, so deleted files stay stored.
+- Status: closed for the access decision, partly open for retention.
+
+## T15. Features that do not exist yet
+- Replacing the contents of a document, versions, restore of deleted documents, user management screens (is_active exists in the database but no endpoint sets it), sharing with people outside the company, retention, AI suggestions.
+- Each will go through authorize() when built.
 - Status: not built.

@@ -18,8 +18,7 @@ These are public demo accounts with fake data.
 | Viewer | dave@trustvault.test | Dave-Demo-2026! |
 
 ## What each role can do
-
-- **Owner**: uploads documents, searches and downloads own documents, grants and revokes read or edit access to named people.
+- **Owner**: uploads documents, searches, downloads, renames and deletes own documents, grants and revokes read or edit access to named people.
 - **Viewer**: sees and downloads only documents that were granted to them. Cannot upload or share.
 - **Admin**: sees activity, permission changes and refused attempts, and can verify the audit chain. Never sees document contents.
 
@@ -83,5 +82,4 @@ New Web Service from the GitHub repo. Build command `npm install`, start command
 - `db/schema.sql`: database schema
 
 ## What is not built yet
-
-Document edit and delete endpoints, versions, sharing with people outside the company, retention, AI suggestions for who should see a document. See THREATS.md for the reasoning.
+Restoring deleted documents, versions, replacing a document's contents, user management, sharing with people outside the company, retention, AI suggestions for who should see a document. See THREATS.md for the reasoning.

@@ -38,6 +38,13 @@ These are allowed only for the owner of that document. Anyone else, including ot
 | POST `/api/documents/:id/grants` | Body `{email, permission}` with permission `read` or `edit`. Grants or changes access. Cannot grant to yourself, to an admin, or to an inactive user (400) |
 | DELETE `/api/documents/:id/grants/:userId` | Takes access away. Applies to that user's very next request, with the token they already hold |
 
+## Edit and delete
+
+| Method and path | Who | What |
+|---|---|---|
+| PATCH `/api/documents/:id` | Owner, or a user with an `edit` grant | Body `{name?, category?}`. Changes the name or category, not the file contents. The file extension cannot be changed (400). Everyone else, including users with only a `read` grant and admin: 404. The audit record keeps the before and after values |
+| DELETE `/api/documents/:id` | Owner only | Deletes the document. It disappears from list, search and download for everyone. The encrypted bytes are kept so it can be recovered. Everyone else: 404 |
+
 ## Admin role only
 
 Other roles get 403, and the attempt is written to the audit log.
@@ -50,4 +57,4 @@ Other roles get 403, and the attempt is written to the audit log.
 
 ## Not built
 
-Edit and delete of documents, user management, sharing outside the company. The `edit` permission is stored but nothing uses it yet.
+Restoring a deleted document (the bytes are kept, there is no endpoint yet), replacing the contents of a document, user management, sharing outside the company.
